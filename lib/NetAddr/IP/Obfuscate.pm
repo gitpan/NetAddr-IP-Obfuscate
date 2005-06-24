@@ -1,6 +1,6 @@
 package NetAddr::IP::Obfuscate;
 
-require 5.006_000; # Needed for NetAddr::IP
+require 5.006_000; # Needed for NetAddr::IP and the $fh in _slurp_file
 use strict;
 use warnings;
 require Exporter;
@@ -9,11 +9,11 @@ our @ISA = qw(Exporter);
 
 use vars qw($VERSION @EXPORT);
 
-$VERSION = '0.01';
+$VERSION = '0.02';
 @EXPORT = qw(do_obfu);
 
+use Carp;
 use NetAddr::IP::Find;
-use File::Slurp;
 
 sub do_obfu {
 
@@ -24,7 +24,7 @@ sub do_obfu {
 
   if (scalar(@_) == 0) {
     # No arguments, supply some sane defaults
-      $infile = "STDIN";
+      $infile = "-";
       $net = "10.0.0.0/8";
       $outfile = "STDOUT";
 
@@ -34,21 +34,55 @@ sub do_obfu {
 
     }
 
-  my $text = read_file ("$infile");
+
+  my $text_ref = _slurp_file ($infile);
+
   my $ip = NetAddr::IP->new("$net");
 
-  find_ipaddrs($text, sub {
+  find_ipaddrs($$text_ref, sub {
 		 my($ipaddr, $orig) = @_;
 		 return $obfuscated{$orig} if exists $obfuscated{$orig};
 		 ++$ip;
 		 $obfuscated{$orig} = $ip->addr;
 	       });
 
-  $outfile eq "STDOUT" ? print $text : write_file ("$outfile",$text);
+  _burp_file ($outfile, $text_ref);
 
   return values %obfuscated if wantarray();
 
   return scalar(keys %obfuscated);
+
+}
+
+
+sub _slurp_file {
+
+  my $infile = shift;
+
+  open( my $fh, $infile ) or croak "Unable to open $infile in _slurp_file: $!\n";
+
+  my $text = do { local( $/ ) ; <$fh> } ;
+
+  return \$text;
+
+}
+
+sub _burp_file {
+
+  my $outfile = shift;
+  my $text_ref = shift;
+
+  if ($outfile eq "STDOUT") {
+
+    print $$text_ref;
+
+  } else {
+
+    open( my $fh, ">$outfile" ) or croak "Unable to open $outfile in _burp_file: $!\n" ;
+
+    print $fh $$text_ref ;
+
+  }
 
 }
 
@@ -73,7 +107,7 @@ obfuscated equivalents
   @obfuscated_ips = do_obfu($infile, "10.0.0.0/8", $outfile);
 
   use NetAddr::IP::Obfuscate;
-  do_obfu("STDIN", "10.0.0.0/8", "STDOUT");
+  do_obfu("-", "10.0.0.0/8", "STDOUT");
 
   cat /tmp/somecompany.nsr | \
   perl -MNetAddr::IP::Obfuscate -e 'do_obfu()' > /tmp/sample.nsr
@@ -96,10 +130,11 @@ NetAddr::IP::Obfuscate exports one function, do_obfu().
   @obfuscated_ips = do_obfu ($infile, $network, $outfile);
 
 There is a no argument form of do_obfu, that assigns default values to
-all its parameters. The first, the input file, is set to "STDIN", the
-second, the network range used for replacement, is set to
-"10.0.0.0/8", and the last, the output file, is set to "STDOUT". This
-form is particularly useful for something like this one-liner:
+all its parameters. The first, the input file, is set to "-" (reads
+from STDIN), the second, the network range used for replacement, is
+set to "10.0.0.0/8", and the last, the output file, is set to
+"STDOUT". This form is particularly useful for something like this
+one-liner:
 
   cat /tmp/somecompany.nsr | \
   perl -MNetAddr::IP::Obfuscate -e 'do_obfu()' > /tmp/sample.nsr
@@ -110,7 +145,7 @@ IP's from the range 10.0.0.0/8, and write the result out to
 
 In the three-argument version, the first argument is the input text
 file, presumably containing IP addresses, that we will be
-obfuscating. Use the string "STDIN" to read from standard input.
+obfuscating. Use the string "-" to read from standard input.
 
 The second argument is a network address, which should be given in
 CIDR notation, and really represents a range of IP addresses from
@@ -128,10 +163,6 @@ standard output.
 do_obfu returns the total number of IP addresses replaced if it is
 called in a scalar context, or a list of the obfuscated IP addresses,
 if called in a list context.
-
-Using File::Slurp in do_obfu gets error checking on the file reads and
-writes for free, and also means that the file slurping/burping is
-fast.
 
 =head1 EXAMPLES
 

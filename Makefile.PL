@@ -5,8 +5,7 @@ use ExtUtils::MakeMaker;
 WriteMakefile(
     NAME              => 'NetAddr::IP::Obfuscate',
     VERSION_FROM      => 'lib/NetAddr/IP/Obfuscate.pm', # finds $VERSION
-    PREREQ_PM         => { NetAddr::IP::Find => 0.03,
-			   File::Slurp => 0 }, # e.g., Module::Name => 1.1
+    PREREQ_PM         => { NetAddr::IP::Find => 0.03 }, # e.g., Module::Name => 1.1
     ($] >= 5.005 ?     ## Add these new keywords supported since 5.005
       (AUTHOR         => 'Doug Maxwell <doug@turinglabs.com>') : ()),
 );
